@@ -38,6 +38,49 @@ Credentials are cached in `~/.bp/creds.yaml`. If a valid token is close to expir
 - `ttp ws <tracker-id> <raw|rawinput|pos>` - stream WebSocket data to stdout
 - `ttp wsi` - open an interactive WebSocket streaming UI
 - `ttp version` - print the CLI version
+- `ttp completion <shell>` - generate shell completion scripts
+
+## WebSocket Data Channels
+
+You can stream real-time telemetry from a specific tracker using the `ttp ws` command:
+
+```sh
+ttp ws <tracker-id> <channel>
+```
+
+The `<channel>` argument determines the type of telemetry data you receive:
+
+- **`pos`**: Processed position data.
+- **`rawinput`**: Unprocessed, base64-encoded raw data sent immediately upon receipt from the tracker, regardless of processing status. If a processing error occurs (e.g., due to an unsupported data format), the error reported by the backend will be included here. **Use this channel when adapting new data formats to see backend processing errors.**
+- **`raw`**: Base64-encoded raw data that has been successfully decoded and sequenced. If packets arrive out of order, the backend reorders them and delivers them in the correct sequence on this channel.
+
+### Message JSON Format
+
+Messages received over the WebSocket are formatted as JSON objects. A typical message payload includes telemetry data, device metadata, and a timestamp:
+
+```json
+{
+  "raw_imu": "<base64_string>",
+  "position": { ... },
+  "tracker_id": "<uuid>",
+  "device_id": "<uuid>",
+  "thing_name": "<string>",
+  "timestamp": "<iso8601_datetime>",
+  "message_index": 0,
+  "message_count": 2,
+  "error": "<error_message>"
+}
+```
+
+**Handling Large Messages**
+
+WebSocket messages have a size limit. If a payload—such as a large array of positions or an extensive base64 raw string—exceeds this limit, the backend automatically splits it into multiple smaller chunks.
+
+When a message is chunked, the payload includes two specific fields:
+- `message_count`: The total number of chunks the original message was split into.
+- `message_index`: The 0-based sequence index of the current chunk.
+
+To reconstruct the complete payload, clients should buffer incoming chunks that share the same `timestamp` and concatenate their primary data elements (i.e., appending `raw_imu` strings or merging `position.Positions` arrays) sequentially based on the `message_index`. If a message fits within the size limit and is not chunked, these fields are omitted for backward compatibility.
 
 ## Configuration
 
